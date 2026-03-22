@@ -6,7 +6,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/EricNguyen1206/erionn-mq/internal/broker"
+	"erionn-mq/internal/broker"
 )
 
 type TCPServer struct {

@@ -1,3 +1,3 @@
-module github.com/EricNguyen1206/erionn-mq
+module erionn-mq
 
 go 1.25.0

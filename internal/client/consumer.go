@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/EricNguyen1206/erionn-mq/internal/partition"
+	"erionn-mq/internal/partition"
 )
 
 type Consumer struct {

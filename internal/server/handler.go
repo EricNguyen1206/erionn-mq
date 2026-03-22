@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/EricNguyen1206/erionn-mq/internal/broker"
-	"github.com/EricNguyen1206/erionn-mq/internal/partition"
+	"erionn-mq/internal/broker"
+	"erionn-mq/internal/partition"
 )
 
 type ConnectionHandler struct {

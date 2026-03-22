@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/EricNguyen1206/erionn-mq/internal/partition"
+	"erionn-mq/internal/partition"
 )
 
 const BROKER_PORT = 10000

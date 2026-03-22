@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/EricNguyen1206/erionn-mq/internal/client"
-	"github.com/EricNguyen1206/erionn-mq/internal/consumer"
+	"erionn-mq/internal/client"
 )
 
 func main() {

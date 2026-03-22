@@ -3,7 +3,7 @@ package logstore
 import (
 	"sync"
 
-	"github.com/EricNguyen1206/erionn-mq/internal/partition"
+	"erionn-mq/internal/partition"
 )
 
 type MemoryLog struct {
