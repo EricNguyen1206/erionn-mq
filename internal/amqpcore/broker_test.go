@@ -249,3 +249,13 @@ func TestBroker_DeclareQueue_RedeclareMismatchErrors(t *testing.T) {
 		t.Fatal("expected redeclare mismatch error, got nil")
 	}
 }
+
+func TestBroker_DeclareQueue_RedeclareTreatsNilAndEmptyArgsAsEqual(t *testing.T) {
+	b := newBroker()
+	if _, err := b.DeclareQueue("jobs", false, false, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.DeclareQueue("jobs", false, false, false, map[string]any{}); err != nil {
+		t.Fatalf("expected nil and empty args to be equivalent, got %v", err)
+	}
+}

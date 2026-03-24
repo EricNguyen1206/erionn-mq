@@ -23,7 +23,7 @@ func TestFrame_RoundTrip(t *testing.T) {
 		t.Fatalf("WriteFrame: %v", err)
 	}
 
-	got, err := ReadFrame(&buf)
+	got, err := ReadFrame(&buf, defaultFrameMax)
 	if err != nil {
 		t.Fatalf("ReadFrame: %v", err)
 	}
@@ -64,5 +64,70 @@ func TestContentHeader_RoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Properties, head.Properties) {
 		t.Fatalf("properties mismatch: got=%#v want=%#v", got.Properties, head.Properties)
+	}
+}
+
+func TestReadFrame_RejectsPayloadOverFrameMax(t *testing.T) {
+	var buf bytes.Buffer
+	frame := Frame{Type: FrameMethod, Channel: 1, Payload: []byte("12345")}
+	if err := WriteFrame(&buf, frame); err != nil {
+		t.Fatalf("WriteFrame: %v", err)
+	}
+
+	_, err := ReadFrame(&buf, 4)
+	if err == nil {
+		t.Fatal("expected frame-max validation error, got nil")
+	}
+}
+
+func TestReadFrame_RejectsPayloadOverRemainingBytes(t *testing.T) {
+	data := []byte{
+		FrameMethod,
+		0, 1,
+		0, 0, 0, 5,
+		'a', 'b',
+	}
+
+	_, err := ReadFrame(bytes.NewReader(data), defaultFrameMax)
+	if err == nil {
+		t.Fatal("expected remaining-bytes validation error, got nil")
+	}
+}
+
+func TestReadFrame_RejectsMissingFrameTerminatorBeforeAllocation(t *testing.T) {
+	data := []byte{
+		FrameMethod,
+		0, 1,
+		0, 0, 0, 2,
+		'a', 'b',
+	}
+
+	_, err := ReadFrame(bytes.NewReader(data), defaultFrameMax)
+	if err == nil {
+		t.Fatal("expected missing-terminator validation error, got nil")
+	}
+}
+
+func TestReadLongstr_RejectsLengthOverRemainingBytes(t *testing.T) {
+	r := bytes.NewReader([]byte{0, 0, 0, 5, 'a', 'b'})
+	_, err := readLongstr(r)
+	if err == nil {
+		t.Fatal("expected longstr validation error, got nil")
+	}
+}
+
+func TestReadTable_RejectsLengthOverRemainingBytes(t *testing.T) {
+	r := bytes.NewReader([]byte{0, 0, 0, 4, 'a'})
+	_, err := readTable(r)
+	if err == nil {
+		t.Fatal("expected table validation error, got nil")
+	}
+}
+
+func TestReadArray_RejectsLengthOverRemainingBytes(t *testing.T) {
+	r := bytes.NewReader([]byte{0, 0, 0, 4, 'b'})
+	_, err := readArray(r)
+	if err == nil {
+		t.Fatal("expected array validation error, got nil")
 	}
 }

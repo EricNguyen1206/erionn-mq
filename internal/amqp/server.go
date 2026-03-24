@@ -43,6 +43,7 @@ type serverConn struct {
 }
 
 type channelState struct {
+	broker  *amqpcore.Broker
 	channel *amqpcore.Channel
 
 	mu              sync.Mutex
@@ -143,7 +144,7 @@ func (c *serverConn) serve() error {
 	}
 
 	for {
-		frame, err := ReadFrame(c.netConn)
+		frame, err := ReadFrame(c.netConn, c.frameMax)
 		if err != nil {
 			return err
 		}
@@ -287,6 +288,7 @@ func (c *serverConn) handleChannelOpen(id uint16) error {
 	c.mu.Lock()
 	if _, exists := c.channels[id]; !exists {
 		c.channels[id] = &channelState{
+			broker: c.broker,
 			channel: &amqpcore.Channel{
 				ID:         id,
 				Connection: c.amqpConn,
@@ -375,6 +377,9 @@ func (c *serverConn) handleQueueDeclare(channel uint16, m QueueDeclare) error {
 func (c *serverConn) handleQueueBind(channel uint16, m QueueBind) error {
 	if _, err := c.requireChannel(channel); err != nil {
 		return err
+	}
+	if m.Exchange == "" {
+		return fmt.Errorf("amqp: cannot bind the default exchange")
 	}
 	if err := c.broker.BindQueue(m.Exchange, m.Queue, m.RoutingKey, map[string]any(m.Arguments)); err != nil {
 		return err
@@ -506,7 +511,7 @@ func (c *serverConn) handleBasicAck(channel uint16, m BasicAck) error {
 }
 
 func (c *serverConn) readPublishedContent(channel uint16) (ContentHeader, []byte, error) {
-	headerFrame, err := ReadFrame(c.netConn)
+	headerFrame, err := ReadFrame(c.netConn, c.frameMax)
 	if err != nil {
 		return ContentHeader{}, nil, err
 	}
@@ -519,9 +524,21 @@ func (c *serverConn) readPublishedContent(channel uint16) (ContentHeader, []byte
 		return ContentHeader{}, nil, err
 	}
 
-	body := make([]byte, 0, header.BodySize)
+	const MAX_BODY_SIZE = 256 * 1024 * 1024 // 256 MB
+	if header.BodySize > MAX_BODY_SIZE {
+		return ContentHeader{}, nil, fmt.Errorf("amqp: body size %d exceeds maximum %d", header.BodySize, MAX_BODY_SIZE)
+	}
+	if header.BodySize > uint64(maxAllocSize) {
+		return ContentHeader{}, nil, fmt.Errorf("amqp: body size %d exceeds supported allocation size", header.BodySize)
+	}
+
+	bodyCap := int(header.BodySize)
+	if c.frameMax > 0 && header.BodySize > uint64(c.frameMax) {
+		bodyCap = int(c.frameMax)
+	}
+	body := make([]byte, 0, bodyCap)
 	for uint64(len(body)) < header.BodySize {
-		frame, err := ReadFrame(c.netConn)
+		frame, err := ReadFrame(c.netConn, c.frameMax)
 		if err != nil {
 			return ContentHeader{}, nil, err
 		}
@@ -530,6 +547,10 @@ func (c *serverConn) readPublishedContent(channel uint16) (ContentHeader, []byte
 		}
 		if frame.Type != FrameBody || frame.Channel != channel {
 			return ContentHeader{}, nil, fmt.Errorf("amqp: expected body frame on channel %d", channel)
+		}
+		remaining := header.BodySize - uint64(len(body))
+		if uint64(len(frame.Payload)) > remaining {
+			return ContentHeader{}, nil, fmt.Errorf("amqp: body frame size %d exceeds remaining body bytes %d", len(frame.Payload), remaining)
 		}
 		body = append(body, frame.Payload...)
 	}
@@ -779,12 +800,24 @@ func (ch *channelState) stopAllConsumers() {
 	for _, consumer := range ch.consumers {
 		consumers = append(consumers, consumer)
 	}
+	refs := make([]deliveryRef, 0, len(ch.inFlight))
+	for _, ref := range ch.inFlight {
+		refs = append(refs, ref)
+	}
 	ch.consumers = make(map[string]*consumerState)
 	ch.channel.Consumers = make(map[string]*amqpcore.ConsumerSubscription)
-	ch.mu.Unlock()
-
+	ch.inFlight = make(map[uint64]deliveryRef)
 	for _, consumer := range consumers {
 		consumer.stopConsuming()
+	}
+	ch.mu.Unlock()
+
+	for _, ref := range refs {
+		q, err := ch.broker.GetQueue(ref.queueName)
+		if err != nil {
+			continue
+		}
+		_ = q.Nack(ref.storeTag, true)
 	}
 }
 
@@ -823,10 +856,13 @@ func (ch *channelState) ackRefs(deliveryTag uint64, multiple bool) ([]deliveryRe
 	if multiple {
 		refs := make([]deliveryRef, 0)
 		for tag, ref := range ch.inFlight {
-			if tag <= deliveryTag {
+			if deliveryTag == 0 || tag <= deliveryTag {
 				refs = append(refs, ref)
 				delete(ch.inFlight, tag)
 			}
+		}
+		if deliveryTag == 0 {
+			return refs, nil
 		}
 		if len(refs) == 0 {
 			return nil, fmt.Errorf("amqp: unknown delivery tag %d", deliveryTag)

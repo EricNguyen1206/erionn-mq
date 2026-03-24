@@ -96,7 +96,7 @@ func (b *Broker) DeclareQueue(name string, durable, exclusive, autoDelete bool, 
 	defer b.mu.Unlock()
 
 	if q, ok := b.queues[name]; ok {
-		if q.Durable != durable || q.Exclusive != exclusive || q.AutoDelete != autoDelete || !reflect.DeepEqual(q.Args, args) {
+		if q.Durable != durable || q.Exclusive != exclusive || q.AutoDelete != autoDelete || !sameArgs(q.Args, args) {
 			return nil, fmt.Errorf("queue %q already declared with different attributes", name)
 		}
 		return q, nil
@@ -106,6 +106,14 @@ func (b *Broker) DeclareQueue(name string, durable, exclusive, autoDelete bool, 
 	b.queues[name] = q
 	b.bindQueueLocked("", name, name, nil)
 	return q, nil
+}
+
+func sameArgs(a, b map[string]any) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+
+	return reflect.DeepEqual(a, b)
 }
 
 // GetQueue returns the named queue or an error if it does not exist.

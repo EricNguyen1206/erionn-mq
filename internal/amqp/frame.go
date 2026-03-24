@@ -22,6 +22,8 @@ const (
 	defaultLocale   = "en_US"
 )
 
+const maxAllocSize = int(^uint(0) >> 1)
+
 var protocolHeader = []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}
 
 type Frame struct {
@@ -72,15 +74,23 @@ func WriteProtocolHeader(w io.Writer) error {
 	return err
 }
 
-func ReadFrame(r io.Reader) (Frame, error) {
+func ReadFrame(r io.Reader, frameMax uint32) (Frame, error) {
+	if frameMax == 0 {
+		frameMax = defaultFrameMax
+	}
+
 	var header [7]byte
 	if _, err := io.ReadFull(r, header[:]); err != nil {
 		return Frame{}, err
 	}
 
 	size := binary.BigEndian.Uint32(header[3:])
-	payload := make([]byte, size)
-	if _, err := io.ReadFull(r, payload); err != nil {
+	if err := validateFramePayloadSize(size, frameMax, remainingBytes(r)); err != nil {
+		return Frame{}, err
+	}
+
+	payload, err := readSizedBytes(r, size, 0, "frame payload")
+	if err != nil {
 		return Frame{}, err
 	}
 
@@ -181,8 +191,8 @@ func readShortstr(r *bytes.Reader) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	b := make([]byte, int(n))
-	if _, err := io.ReadFull(r, b); err != nil {
+	b, err := readSizedBytes(r, uint32(n), 0, "shortstr")
+	if err != nil {
 		return "", err
 	}
 	return string(b), nil
@@ -206,11 +216,7 @@ func readLongstr(r *bytes.Reader) ([]byte, error) {
 	if err := binary.Read(r, binary.BigEndian, &n); err != nil {
 		return nil, err
 	}
-	b := make([]byte, n)
-	if _, err := io.ReadFull(r, b); err != nil {
-		return nil, err
-	}
-	return b, nil
+	return readSizedBytes(r, n, 0, "longstr")
 }
 
 func writeTable(w *bytes.Buffer, table Table) error {
@@ -241,8 +247,8 @@ func readTable(r *bytes.Reader) (Table, error) {
 		return nil, err
 	}
 
-	data := make([]byte, size)
-	if _, err := io.ReadFull(r, data); err != nil {
+	data, err := readSizedBytes(r, size, 0, "table")
+	if err != nil {
 		return nil, err
 	}
 
@@ -304,6 +310,9 @@ func writeFieldValue(w *bytes.Buffer, value any) error {
 		w.WriteByte('I')
 		return binary.Write(w, binary.BigEndian, v)
 	case int:
+		if int64(v) < -1<<31 || int64(v) > 1<<31-1 {
+			return fmt.Errorf("amqp: int field value out of range for 32-bit AMQP integer: %d", v)
+		}
 		w.WriteByte('I')
 		return binary.Write(w, binary.BigEndian, int32(v))
 	case int64:
@@ -368,7 +377,13 @@ func readFieldValue(r *bytes.Reader) (any, error) {
 		return readArray(r)
 	case 'T':
 		var v uint64
-		return v, binary.Read(r, binary.BigEndian, &v)
+		if err := binary.Read(r, binary.BigEndian, &v); err != nil {
+			return nil, err
+		}
+		if v > uint64(1<<63-1) {
+			return nil, fmt.Errorf("amqp: timestamp out of range: %d", v)
+		}
+		return time.Unix(int64(v), 0).UTC(), nil
 	case 'F':
 		return readTable(r)
 	default:
@@ -394,8 +409,8 @@ func readArray(r *bytes.Reader) ([]any, error) {
 		return nil, err
 	}
 
-	data := make([]byte, size)
-	if _, err := io.ReadFull(r, data); err != nil {
+	data, err := readSizedBytes(r, size, 0, "array")
+	if err != nil {
 		return nil, err
 	}
 
@@ -409,6 +424,56 @@ func readArray(r *bytes.Reader) ([]any, error) {
 		values = append(values, value)
 	}
 	return values, nil
+}
+
+func readSizedBytes(r io.Reader, size uint32, frameMax uint32, label string) ([]byte, error) {
+	if err := validatePeerSize(size, frameMax, remainingBytes(r), label); err != nil {
+		return nil, err
+	}
+
+	b := make([]byte, int(size))
+	if _, err := io.ReadFull(r, b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func validateFramePayloadSize(size uint32, frameMax uint32, remaining int) error {
+	if frameMax > 0 && size > frameMax {
+		return fmt.Errorf("amqp: frame payload size %d exceeds frame max %d", size, frameMax)
+	}
+	if remaining >= 0 && uint64(size)+1 > uint64(remaining) {
+		return fmt.Errorf("amqp: frame payload size %d exceeds remaining bytes %d", size, remaining)
+	}
+	if uint64(size) > uint64(maxAllocSize) {
+		return fmt.Errorf("amqp: frame payload size %d exceeds supported allocation size", size)
+	}
+	return nil
+}
+
+func validatePeerSize(size uint32, frameMax uint32, remaining int, label string) error {
+	if frameMax > 0 && size > frameMax {
+		return fmt.Errorf("amqp: %s size %d exceeds frame max %d", label, size, frameMax)
+	}
+	if remaining >= 0 && uint64(size) > uint64(remaining) {
+		return fmt.Errorf("amqp: %s size %d exceeds remaining bytes %d", label, size, remaining)
+	}
+	if uint64(size) > uint64(maxAllocSize) {
+		return fmt.Errorf("amqp: %s size %d exceeds supported allocation size", label, size)
+	}
+	return nil
+}
+
+func remainingBytes(r io.Reader) int {
+	type lenReader interface {
+		Len() int
+	}
+
+	lr, ok := r.(lenReader)
+	if !ok {
+		return -1
+	}
+	return lr.Len()
 }
 
 func encodePropertyFlags(props BasicProperties) (uint16, error) {

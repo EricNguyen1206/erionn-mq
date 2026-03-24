@@ -54,9 +54,9 @@ func TestServer_BasicQos_BlocksUntilAck(t *testing.T) {
 	if string(body) != "first" {
 		t.Fatalf("unexpected first delivery body: %q", string(body))
 	}
-
-	client.conn.SetReadDeadline(time.Now().Add(150 * time.Millisecond))
-	_, err := ReadFrame(client.conn)
+	const noDeliveryProbeTimeout = 1 * time.Second
+	client.conn.SetReadDeadline(time.Now().Add(noDeliveryProbeTimeout))
+	_, err := ReadFrame(client.conn, defaultFrameMax)
 	if err == nil {
 		t.Fatal("expected no second delivery before ack")
 	}
@@ -80,9 +80,194 @@ func TestServer_BasicQos_BlocksUntilAck(t *testing.T) {
 	client.closeChannelAndConnection(t, 1)
 }
 
+func TestChannelState_StopAllConsumers_RequeuesInFlightMessages(t *testing.T) {
+	broker := amqpcore.NewBroker(func() store.MessageStore {
+		return store.NewMemoryMessageStore()
+	})
+	q, err := broker.DeclareQueue("jobs", false, false, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.Enqueue(amqpcore.Message{Body: []byte("hello")}); err != nil {
+		t.Fatal(err)
+	}
+
+	msg, ok, err := q.Dequeue()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected dequeued message")
+	}
+
+	ch := &channelState{
+		broker: broker,
+		channel: &amqpcore.Channel{
+			Consumers: make(map[string]*amqpcore.ConsumerSubscription),
+		},
+		inFlight: map[uint64]deliveryRef{
+			1: {queueName: "jobs", storeTag: msg.DeliveryTag},
+		},
+		consumers: map[string]*consumerState{
+			"ctag-1": {tag: "ctag-1", queueName: "jobs", stop: make(chan struct{})},
+		},
+	}
+
+	ch.stopAllConsumers()
+
+	if q.Len() != 1 {
+		t.Fatalf("expected queue length 1 after requeue, got %d", q.Len())
+	}
+	requeued, ok, err := q.Dequeue()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected requeued message")
+	}
+	if !requeued.Redelivered {
+		t.Fatal("expected requeued message to be marked redelivered")
+	}
+}
+
+func TestServer_HandleChannelClose_RequeuesInFlightMessages(t *testing.T) {
+	broker := amqpcore.NewBroker(func() store.MessageStore {
+		return store.NewMemoryMessageStore()
+	})
+	q, msg := dequeueUnackedMessage(t, broker, "jobs")
+
+	conn := &serverConn{
+		broker:   broker,
+		netConn:  discardConn{},
+		channels: make(map[uint16]*channelState),
+		done:     make(chan struct{}),
+	}
+	conn.channels[1] = &channelState{
+		broker: broker,
+		channel: &amqpcore.Channel{
+			Consumers: make(map[string]*amqpcore.ConsumerSubscription),
+		},
+		inFlight: map[uint64]deliveryRef{
+			1: {queueName: "jobs", storeTag: msg.DeliveryTag},
+		},
+		consumers: map[string]*consumerState{
+			"ctag-1": {tag: "ctag-1", queueName: "jobs", stop: make(chan struct{})},
+		},
+	}
+
+	if err := conn.handleChannelClose(1); err != nil {
+		t.Fatal(err)
+	}
+	if q.Len() != 1 {
+		t.Fatalf("expected queue length 1 after channel close, got %d", q.Len())
+	}
+}
+
+func TestServerConn_Close_RequeuesInFlightMessages(t *testing.T) {
+	broker := amqpcore.NewBroker(func() store.MessageStore {
+		return store.NewMemoryMessageStore()
+	})
+	q, msg := dequeueUnackedMessage(t, broker, "jobs")
+
+	conn := &serverConn{
+		server:   &Server{connections: make(map[uint64]*serverConn)},
+		broker:   broker,
+		netConn:  discardConn{},
+		amqpConn: &amqpcore.Connection{ID: 1},
+		channels: make(map[uint16]*channelState),
+		done:     make(chan struct{}),
+	}
+	conn.channels[1] = &channelState{
+		broker: broker,
+		channel: &amqpcore.Channel{
+			Consumers: make(map[string]*amqpcore.ConsumerSubscription),
+		},
+		inFlight: map[uint64]deliveryRef{
+			1: {queueName: "jobs", storeTag: msg.DeliveryTag},
+		},
+		consumers: map[string]*consumerState{
+			"ctag-1": {tag: "ctag-1", queueName: "jobs", stop: make(chan struct{})},
+		},
+	}
+
+	conn.close()
+	if q.Len() != 1 {
+		t.Fatalf("expected queue length 1 after connection close, got %d", q.Len())
+	}
+}
+
+func TestChannelState_AckRefs_MultipleZeroAcknowledgesAll(t *testing.T) {
+	ch := &channelState{
+		inFlight: map[uint64]deliveryRef{
+			1: {queueName: "q1", storeTag: 11},
+			2: {queueName: "q2", storeTag: 22},
+			3: {queueName: "q3", storeTag: 33},
+		},
+	}
+
+	refs, err := ch.ackRefs(0, true)
+	if err != nil {
+		t.Fatalf("ackRefs(0, true): %v", err)
+	}
+	if len(refs) != 3 {
+		t.Fatalf("expected 3 refs, got %d", len(refs))
+	}
+	if len(ch.inFlight) != 0 {
+		t.Fatalf("expected inFlight to be empty, got %d entries", len(ch.inFlight))
+	}
+}
+
+func TestChannelState_AckRefs_MultipleZeroOnEmptyIsNoOp(t *testing.T) {
+	ch := &channelState{inFlight: make(map[uint64]deliveryRef)}
+
+	refs, err := ch.ackRefs(0, true)
+	if err != nil {
+		t.Fatalf("ackRefs(0, true): %v", err)
+	}
+	if len(refs) != 0 {
+		t.Fatalf("expected no refs, got %d", len(refs))
+	}
+}
+
 type testClient struct {
 	t    *testing.T
 	conn net.Conn
+}
+
+type discardConn struct{}
+
+func (discardConn) Read(_ []byte) (int, error)       { return 0, net.ErrClosed }
+func (discardConn) Write(p []byte) (int, error)      { return len(p), nil }
+func (discardConn) Close() error                     { return nil }
+func (discardConn) LocalAddr() net.Addr              { return dummyAddr("local") }
+func (discardConn) RemoteAddr() net.Addr             { return dummyAddr("remote") }
+func (discardConn) SetDeadline(time.Time) error      { return nil }
+func (discardConn) SetReadDeadline(time.Time) error  { return nil }
+func (discardConn) SetWriteDeadline(time.Time) error { return nil }
+
+type dummyAddr string
+
+func (a dummyAddr) Network() string { return string(a) }
+func (a dummyAddr) String() string  { return string(a) }
+
+func dequeueUnackedMessage(t *testing.T, broker *amqpcore.Broker, queueName string) (*amqpcore.Queue, amqpcore.Message) {
+	t.Helper()
+
+	q, err := broker.DeclareQueue(queueName, false, false, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.Enqueue(amqpcore.Message{Body: []byte("hello")}); err != nil {
+		t.Fatal(err)
+	}
+	msg, ok, err := q.Dequeue()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected dequeued message")
+	}
+	return q, msg
 }
 
 func newTestClient(t *testing.T) *testClient {
@@ -217,7 +402,7 @@ func (c *testClient) readDelivery(t *testing.T, channel uint16) (BasicDeliver, C
 		t.Fatal("expected BasicDeliver")
 	}
 
-	frame, err := ReadFrame(c.conn)
+	frame, err := ReadFrame(c.conn, defaultFrameMax)
 	if err != nil {
 		t.Fatalf("ReadFrame(header): %v", err)
 	}
@@ -231,7 +416,7 @@ func (c *testClient) readDelivery(t *testing.T, channel uint16) (BasicDeliver, C
 
 	body := make([]byte, 0, header.BodySize)
 	for uint64(len(body)) < header.BodySize {
-		frame, err := ReadFrame(c.conn)
+		frame, err := ReadFrame(c.conn, defaultFrameMax)
 		if err != nil {
 			t.Fatalf("ReadFrame(body): %v", err)
 		}
@@ -271,7 +456,7 @@ func (c *testClient) sendMethod(t *testing.T, channel uint16, method Method) {
 
 func (c *testClient) readMethod(t *testing.T) Method {
 	t.Helper()
-	frame, err := ReadFrame(c.conn)
+	frame, err := ReadFrame(c.conn, defaultFrameMax)
 	if err != nil {
 		t.Fatalf("ReadFrame: %v", err)
 	}
