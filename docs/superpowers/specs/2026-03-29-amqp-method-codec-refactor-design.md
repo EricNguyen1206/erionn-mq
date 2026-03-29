@@ -243,24 +243,37 @@ Every site that constructs a method struct value must add `methodHeader`. These 
 - `handleMethod()` case `ConnectionClose` — `ConnectionCloseOk{}`
 - `handleConnectionStartOk()` — `ConnectionTune{...}`
 - `handleConnectionOpen()` — `ConnectionOpenOk{}`
+- `sendDelivery()` — `BasicDeliver{...}`
 
 **`internal/amqp/channel.go`:**
+- `handleChannelOpen()` — `ChannelOpenOk{...}`
 - `handleChannelClose()` — `ChannelCloseOk{}`
 
 **`internal/amqp/topology.go`:**
 - `handleExchangeDeclare()` — `ExchangeDeclareOk{}`
+- `handleQueueDeclare()` — `QueueDeclareOk{...}`
 - `handleQueueBind()` — `QueueBindOk{}`
 
 **`internal/amqp/consume.go`:**
 - `handleBasicQos()` — `BasicQosOk{}`
+- `handleBasicConsume()` — `BasicConsumeOk{...}`
+- `handleBasicCancel()` — `BasicCancelOk{...}`
 
 **`internal/amqp/publish.go`:**
+- `handleBasicPublish()` — `BasicNack{...}`, `BasicAck{...}` (confirm-mode error/success paths)
 - `handleConfirmSelect()` — `ConfirmSelectOk{}`
 
 **`internal/amqp/server_test.go`:**
 - `handshake()` — `ConnectionStartOk{...}`, `ConnectionTuneOk{...}`, `ConnectionOpen{...}`
 - `openChannel()` — `ChannelOpen{}`
+- `consume()` — `BasicConsume{...}`
+- `declareExchange()` — `ExchangeDeclare{...}`
+- `declareQueue()` — `QueueDeclare{...}`
+- `bindQueue()` — `QueueBind{...}`
+- `cancelConsumer()` — `BasicCancel{...}`
+- `publish()` — `BasicPublish{...}`
 - `closeChannelAndConnection()` — `ChannelClose{...}`, `ConnectionClose{...}`
+- Inline test bodies — `BasicAck`, `BasicNack`, `BasicReject`, `BasicQos`, `ConfirmSelect`
 
 ## Test updates
 
@@ -273,7 +286,7 @@ Every site that constructs a method struct value must add `methodHeader`. These 
 
 ## Estimated impact
 
-- Lines: ~1037 → ~940
+- Lines: ~1037 → ~980
 - New test coverage for dispatch, shared helpers, and server-constructed method encoding
 - Zero performance regression (map lookup vs switch is comparable for 31 sparse keys)
 - Zero new dependencies
