@@ -21,6 +21,10 @@
 Replace per-type `ClassID()`/`MethodID()` methods with a single embedded struct:
 
 ```go
+// methodHeader carries the AMQP class and method IDs for a method type.
+// The class and method values MUST match the concrete type they are embedded in
+// (e.g. classConnection/10 for ConnectionStart). The type system cannot enforce
+// this — a mismatched header will produce incorrect wire output.
 type methodHeader struct {
     class  uint16
     method uint16
@@ -55,6 +59,10 @@ c.sendMethod(0, ConnectionStart{
     // ...
 })
 ```
+
+**Caveat: empty Ok types are no longer zero-value.** Types like `ConnectionCloseOk{}`, `ExchangeDeclareOk{}`, etc. currently have no fields and can be constructed as bare `{}`. After embedding `methodHeader`, bare `{}` produces `methodHeader{0, 0}`, which encodes wrong class/method IDs to the wire. Every construction site — including `reflect.DeepEqual` comparisons in tests — must explicitly set the header. Type switches (`case ConnectionCloseOk:`) are unaffected since they match on the concrete type, not the header values.
+
+**Caveat: the type system cannot prevent a mismatched header.** Setting `methodHeader{classConnection, 10}` on a `ChannelClose` compiles fine but produces incorrect wire output. The godoc comment on `methodHeader` warns about this. The test `TestServerConstructedMethods_HaveCorrectClassMethodIDs` catches mismatches by verifying the encoded bytes match expected class/method pairs.
 
 ### 2. Map-based decode dispatch
 
@@ -96,7 +104,7 @@ var methodDecoders = map[methodKey]func(*bytes.Reader) (Method, error){
 }
 ```
 
-For empty `Ok` types that carry no payload, use one-liner closures that explicitly set `methodHeader`. **Do not use reflection or generics for these.** A zero-value `methodHeader{0, 0}` would cause `EncodeMethodFrame` to write incorrect class/method IDs to the wire, so every closure must set the header explicitly:
+For empty `Ok` types that carry no payload, use one-liner closures that explicitly set `methodHeader`. These are entries in the **same `methodDecoders` map** shown above — they are listed separately here only for readability. **Do not use reflection or generics for these.** A zero-value `methodHeader{0, 0}` would cause `EncodeMethodFrame` to write incorrect class/method IDs to the wire, so every closure must set the header explicitly:
 
 ```go
 mkKey(classConnection, 51): func(*bytes.Reader) (Method, error) {
@@ -287,6 +295,7 @@ Every site that constructs a method struct value must add `methodHeader`. These 
 ## Estimated impact
 
 - Lines: ~1037 → ~980
+- **Primary value**: reduced cognitive load when adding new AMQP methods — one map entry + embed header vs 6+ lines of boilerplate (ClassID, MethodID, switch case, decode wrapper). The ~57 line reduction is a secondary benefit.
 - New test coverage for dispatch, shared helpers, and server-constructed method encoding
 - Zero performance regression (map lookup vs switch is comparable for 31 sparse keys)
 - Zero new dependencies
