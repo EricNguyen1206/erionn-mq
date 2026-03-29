@@ -2,9 +2,9 @@
 
 ## Problem
 
-`internal/amqp/methods.go` is 1037 lines implementing ~25 AMQP 0-9-1 method types. It has three sources of duplication:
+`internal/amqp/methods.go` is 1037 lines implementing 31 AMQP 0-9-1 method types. It has three sources of duplication:
 
-1. **Boilerplate interface methods** — `ClassID()` and `MethodID()` are 2-line stubs repeated for every type (~50 lines total).
+1. **Boilerplate interface methods** — `ClassID()` and `MethodID()` are 2-line stubs repeated for every type (62 lines total).
 2. **Nested switch dispatch** — `DecodeMethodFrame` uses an 80-line nested switch over class ID then method ID.
 3. **Identical wire layouts** — `ConnectionClose`/`ChannelClose` and `ConnectionTune`/`ConnectionTuneOk` share the same binary format but have separate marshal/decode implementations.
 
@@ -45,7 +45,7 @@ type ConnectionStart struct {
 
 The `Method` interface remains unchanged (`ClassID()`, `MethodID()`, `marshal(*bytes.Buffer) error`). The embedding satisfies the interface automatically.
 
-All constructor sites that build method values for encoding must include the `methodHeader` field. For example:
+**All constructor sites that build method values must include the `methodHeader` field.** This applies everywhere a method struct is instantiated — both inside `methods.go` (decoder functions) and in all other files that construct methods for encoding. For example:
 
 ```go
 c.sendMethod(0, ConnectionStart{
@@ -75,19 +75,14 @@ var methodDecoders = map[methodKey]func(*bytes.Reader) (Method, error){
     mkKey(classConnection, 40): decodeConnectionOpen,
     mkKey(classConnection, 41): decodeConnectionOpenOk,
     mkKey(classConnection, 50): decodeConnectionClose,
-    mkKey(classConnection, 51): decodeEmpty[ConnectionCloseOk](methodHeader{classConnection, 51}),
     mkKey(classChannel, 10):    decodeChannelOpen,
     mkKey(classChannel, 11):    decodeChannelOpenOk,
     mkKey(classChannel, 40):    decodeChannelClose,
-    mkKey(classChannel, 41):    decodeEmpty[ChannelCloseOk](methodHeader{classChannel, 41}),
     mkKey(classExchange, 10):   decodeExchangeDeclare,
-    mkKey(classExchange, 11):   decodeEmpty[ExchangeDeclareOk](methodHeader{classExchange, 11}),
     mkKey(classQueue, 10):      decodeQueueDeclare,
     mkKey(classQueue, 11):      decodeQueueDeclareOk,
     mkKey(classQueue, 20):      decodeQueueBind,
-    mkKey(classQueue, 21):      decodeEmpty[QueueBindOk](methodHeader{classQueue, 21}),
     mkKey(classBasic, 10):      decodeBasicQos,
-    mkKey(classBasic, 11):      decodeEmpty[BasicQosOk](methodHeader{classBasic, 11}),
     mkKey(classBasic, 20):      decodeBasicConsume,
     mkKey(classBasic, 21):      decodeBasicConsumeOk,
     mkKey(classBasic, 30):      decodeBasicCancel,
@@ -98,28 +93,29 @@ var methodDecoders = map[methodKey]func(*bytes.Reader) (Method, error){
     mkKey(classBasic, 90):      decodeBasicReject,
     mkKey(classBasic, 120):     decodeBasicNack,
     mkKey(classConfirm, 10):    decodeConfirmSelect,
-    mkKey(classConfirm, 11):    decodeEmpty[ConfirmSelectOk](methodHeader{classConfirm, 11}),
 }
 ```
 
-For empty `Ok` types that carry no payload, a generic helper avoids writing individual decoder functions:
-
-```go
-func decodeEmpty[T any](h methodHeader) func(*bytes.Reader) (Method, error) {
-    return func(*bytes.Reader) (Method, error) {
-        var zero T
-        // Set methodHeader via reflection on the embedded field, or
-        // simply return zero value (since ClassID/MethodID come from embedding).
-        return zero, nil
-    }
-}
-```
-
-Alternatively, for simplicity and zero reflection, each empty Ok decoder is a one-liner closure at map init time:
+For empty `Ok` types that carry no payload, use one-liner closures that explicitly set `methodHeader`. **Do not use reflection or generics for these.** A zero-value `methodHeader{0, 0}` would cause `EncodeMethodFrame` to write incorrect class/method IDs to the wire, so every closure must set the header explicitly:
 
 ```go
 mkKey(classConnection, 51): func(*bytes.Reader) (Method, error) {
     return ConnectionCloseOk{methodHeader: methodHeader{classConnection, 51}}, nil
+},
+mkKey(classChannel, 41): func(*bytes.Reader) (Method, error) {
+    return ChannelCloseOk{methodHeader: methodHeader{classChannel, 41}}, nil
+},
+mkKey(classExchange, 11): func(*bytes.Reader) (Method, error) {
+    return ExchangeDeclareOk{methodHeader: methodHeader{classExchange, 11}}, nil
+},
+mkKey(classQueue, 21): func(*bytes.Reader) (Method, error) {
+    return QueueBindOk{methodHeader: methodHeader{classQueue, 21}}, nil
+},
+mkKey(classBasic, 11): func(*bytes.Reader) (Method, error) {
+    return BasicQosOk{methodHeader: methodHeader{classBasic, 11}}, nil
+},
+mkKey(classConfirm, 11): func(*bytes.Reader) (Method, error) {
+    return ConfirmSelectOk{methodHeader: methodHeader{classConfirm, 11}}, nil
 },
 ```
 
@@ -232,38 +228,60 @@ All changes stay in `internal/amqp/methods.go`. The file remains the single sour
 
 | Component | Before | After |
 |---|---|---|
-| `ClassID()` / `MethodID()` | 50 lines across 25 types | Satisfied by `methodHeader` embedding |
+| `ClassID()` / `MethodID()` | 62 lines across 31 types | Satisfied by `methodHeader` embedding |
 | `DecodeMethodFrame` dispatch | 80-line nested switch | Map lookup + single error path |
 | `ConnectionClose` / `ChannelClose` codec | 2 separate implementations | Shared `marshalClose` / `decodeClose` |
 | `ConnectionTune` / `ConnectionTuneOk` codec | 2 separate implementations | Shared `marshalTune` / `decodeTune` |
 | Empty Ok decoders | Inline in switch | One-liner closures in map |
 
-## What stays the same
+## Files outside methods.go that need updating
 
-- The `Method` interface signature.
-- `EncodeMethodFrame` — unchanged.
-- All unique per-method `marshal` and `decode` logic.
-- Frame encoding/decoding in `frame.go`.
-- All other files in `internal/amqp/` and across the project.
+Every site that constructs a method struct value must add `methodHeader`. These are the affected locations:
+
+**`internal/amqp/connection.go`:**
+- `startMethod()` — `ConnectionStart{...}`
+- `handleMethod()` case `ConnectionClose` — `ConnectionCloseOk{}`
+- `handleConnectionStartOk()` — `ConnectionTune{...}`
+- `handleConnectionOpen()` — `ConnectionOpenOk{}`
+
+**`internal/amqp/channel.go`:**
+- `handleChannelClose()` — `ChannelCloseOk{}`
+
+**`internal/amqp/topology.go`:**
+- `handleExchangeDeclare()` — `ExchangeDeclareOk{}`
+- `handleQueueBind()` — `QueueBindOk{}`
+
+**`internal/amqp/consume.go`:**
+- `handleBasicQos()` — `BasicQosOk{}`
+
+**`internal/amqp/publish.go`:**
+- `handleConfirmSelect()` — `ConfirmSelectOk{}`
+
+**`internal/amqp/server_test.go`:**
+- `handshake()` — `ConnectionStartOk{...}`, `ConnectionTuneOk{...}`, `ConnectionOpen{...}`
+- `openChannel()` — `ChannelOpen{}`
+- `closeChannelAndConnection()` — `ChannelClose{...}`, `ConnectionClose{...}`
 
 ## Test updates
 
-- **`TestMethodFrames_RoundTrip`**: Each test case method value must include `methodHeader{...}`. The `reflect.DeepEqual` check works as before since `methodHeader` is a concrete embedded field.
+- **`TestMethodFrames_RoundTrip`**: All 9 test cases must include `methodHeader{...}` in their method values. `reflect.DeepEqual` works as before since `methodHeader` is a concrete embedded field.
 - **New test: `TestDecodeMethodFrame_UnsupportedMethod`**: Verifies that an unknown class/method key returns `"amqp: unsupported method"` error.
-- **New test: `TestDecodeClose_RoundTrip`**: Directly tests `marshalClose`/`decodeClose` helpers with `ConnectionClose` and `ChannelClose` values.
-- **New test: `TestDecodeTune_RoundTrip`**: Directly tests `marshalTune`/`decodeTune` helpers with `ConnectionTune` and `ConnectionTuneOk` values.
+- **New test: `TestMarshalClose_DecodeClose_RoundTrip`**: Directly tests `marshalClose`/`decodeClose` helpers with both `ConnectionClose` and `ChannelClose` values.
+- **New test: `TestMarshalTune_DecodeTune_RoundTrip`**: Directly tests `marshalTune`/`decodeTune` helpers with both `ConnectionTune` and `ConnectionTuneOk` values.
 - **New test: `TestMethodDecoders_AllMethodsRegistered`**: Iterates the map and verifies every entry is non-nil.
+- **New test: `TestServerConstructedMethods_HaveCorrectClassMethodIDs`**: Encodes methods constructed by the server (e.g. `ConnectionStart`, `ConnectionTune`, `BasicDeliver`) via `EncodeMethodFrame` and verifies the class/method IDs on the wire are correct. This catches the case where a developer forgets to set `methodHeader`.
 
 ## Estimated impact
 
-- Lines: ~1037 → ~830
-- New test coverage for dispatch and shared helpers
-- Zero performance regression (map lookup vs switch is comparable for 25 sparse keys)
+- Lines: ~1037 → ~940
+- New test coverage for dispatch, shared helpers, and server-constructed method encoding
+- Zero performance regression (map lookup vs switch is comparable for 31 sparse keys)
 - Zero new dependencies
 
 ## Edge cases
 
 - **Unknown class/method**: Single error path via map miss — identical behavior to current switch default.
-- **Empty payload Ok types**: Decoder closures return zero-value structs with `methodHeader` set. No reader bytes consumed.
+- **Empty payload Ok types**: Decoder closures explicitly set `methodHeader`. No reader bytes consumed.
+- **Missing methodHeader on constructed methods**: If a caller constructs a method without `methodHeader`, the encoder will write class=0, method=0 to the wire. The test `TestServerConstructedMethods_HaveCorrectClassMethodIDs` catches this.
 - **Partial reads**: Shared helpers (`decodeClose`, `decodeTune`) propagate errors from individual `binary.Read` calls — same error behavior as before.
 - **Concurrent map access**: Map is read-only after init. No synchronization needed.
