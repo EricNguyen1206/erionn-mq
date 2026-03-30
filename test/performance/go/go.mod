@@ -1,4 +1,4 @@
-module gobitmq/test/integration
+module gobitmq/test/performance/go
 
 go 1.25.0
 

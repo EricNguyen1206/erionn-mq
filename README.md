@@ -91,4 +91,5 @@ go run ./cmd
 
 - Write Ahead log store message
 - Graceful shutdown
-- Matrix export
+- [Matrix export & mornitoring](https://www.rabbitmq.com/docs/prometheus#overview)
+- [Stream processing](https://www.rabbitmq.com/tutorials/tutorial-one-go-stream)

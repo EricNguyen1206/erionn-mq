@@ -1,9 +1,9 @@
 {
-  "name": "gobitmq-integration",
+  "name": "gobitmq-javascript-integration",
   "private": true,
   "type": "module",
   "scripts": {
-    "smoke": "node amqplib-smoke.mjs",
+    "smoke": "node 11_amqplib_smoke.mjs",
     "compat": "node amqplib-compat.mjs"
   },
   "dependencies": {

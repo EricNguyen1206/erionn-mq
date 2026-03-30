@@ -1,4 +1,4 @@
-package integration_test
+package performance_test
 
 import (
 	"context"
@@ -13,6 +13,13 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+type broker struct {
+	cmd     *exec.Cmd
+	tempDir string
+	amqpURL string
+	mgmtURL string
+}
 
 func startBrokerForBench(b *testing.B) *broker {
 	b.Helper()
@@ -194,7 +201,7 @@ func benchProjectRoot(b *testing.B) string {
 	if !ok {
 		b.Fatal("cannot determine project root")
 	}
-	return filepath.Join(filepath.Dir(file), "..", "..")
+	return filepath.Join(filepath.Dir(file), "..", "..", "..")
 }
 
 func freeBenchPort(b *testing.B) int {
