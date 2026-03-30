@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"erionn-mq/internal/store"
+	"gobitmq/internal/store"
 )
 
 func (c *serverConn) handleBasicAck(channel uint16, m BasicAck) error {

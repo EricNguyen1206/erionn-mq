@@ -17,7 +17,7 @@ func TestMethodFrames_RoundTrip(t *testing.T) {
 			method: ConnStartRequest{
 				VersionMajor:     0,
 				VersionMinor:     9,
-				ServerProperties: Table{"product": "erionn-mq"},
+				ServerProperties: Table{"product": "gobitmq"},
 				Mechanisms:       "PLAIN",
 				Locales:          "en_US",
 			},

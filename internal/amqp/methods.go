@@ -809,7 +809,6 @@ func decodeBasicCancelResponse(r *bytes.Reader) (AMQPMethod, error) {
 	return BasicCancelResponse{ConsumerTag: consumerTag}, nil
 }
 
-
 func (m BasicPublish) ClassID() uint16  { return classBasic }
 func (m BasicPublish) MethodID() uint16 { return 40 }
 func (m BasicPublish) marshal(w *bytes.Buffer) error {
@@ -957,7 +956,9 @@ func (m ConfirmSelectResponse) ClassID() uint16               { return classConf
 func (m ConfirmSelectResponse) MethodID() uint16              { return 11 }
 func (m ConfirmSelectResponse) marshal(w *bytes.Buffer) error { return nil }
 
-func decodeConfirmSelectResponse(*bytes.Reader) (AMQPMethod, error) { return ConfirmSelectResponse{}, nil }
+func decodeConfirmSelectResponse(*bytes.Reader) (AMQPMethod, error) {
+	return ConfirmSelectResponse{}, nil
+}
 
 func marshalClose(w *bytes.Buffer, replyCode uint16, replyText string, classRef, methodRef uint16) error {
 	binary.Write(w, binary.BigEndian, replyCode) //nolint:errcheck

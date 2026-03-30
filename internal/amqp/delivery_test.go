@@ -3,8 +3,8 @@ package amqp
 import (
 	"testing"
 
-	"erionn-mq/internal/broker"
-	"erionn-mq/internal/store"
+	"gobitmq/internal/broker"
+	"gobitmq/internal/store"
 )
 
 func newTestChannelState() *channelState {

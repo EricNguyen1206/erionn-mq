@@ -1,14 +1,14 @@
 services:
-  erionn-mq:
+  gobitmq:
     build: .
     ports:
       - "5672:5672"
       - "15672:15672"
     environment:
-      ERIONN_MGMT_ALLOW_REMOTE: "true"
-      ERIONN_MGMT_USERS: "admin:admin123:admin"
+      GOBITMQ_MGMT_ALLOW_REMOTE: "true"
+      GOBITMQ_MGMT_USERS: "admin:admin123:admin"
     volumes:
-      - erionn-data:/data
+      - gobitmq-data:/data
 
 volumes:
-  erionn-data:
+  gobitmq-data:

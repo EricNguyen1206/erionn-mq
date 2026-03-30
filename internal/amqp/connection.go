@@ -7,8 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"erionn-mq/internal/broker"
-	"erionn-mq/internal/store"
+	"gobitmq/internal/broker"
+	"gobitmq/internal/store"
 )
 
 type serverConn struct {
@@ -89,10 +89,10 @@ func (c *serverConn) startMethod() ConnStartRequest {
 		VersionMajor: 0,
 		VersionMinor: 9,
 		ServerProperties: Table{
-			"product":     "erionn-mq",
+			"product":     "gobitmq",
 			"version":     "0.2.0",
 			"platform":    "Go",
-			"information": "EriOnn-MQ AMQP 0-9-1 MVP",
+			"information": "GoBitMQ AMQP 0-9-1 MVP",
 			"capabilities": Table{
 				"authentication_failure_close": false,
 				"basic.nack":                   true,

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"erionn-mq/internal/store"
+	"gobitmq/internal/store"
 )
 
 type durableBrokerState struct {

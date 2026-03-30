@@ -1,5 +1,5 @@
 {
-  "name": "erionn-mq-integration",
+  "name": "gobitmq-integration",
   "private": true,
   "type": "module",
   "scripts": {

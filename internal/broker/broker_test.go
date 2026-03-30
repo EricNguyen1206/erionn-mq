@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"erionn-mq/internal/broker"
-	"erionn-mq/internal/store"
+	"gobitmq/internal/broker"
+	"gobitmq/internal/store"
 )
 
 // helper: build a broker, declare queues, create bindings for a test scenario.

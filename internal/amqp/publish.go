@@ -3,7 +3,7 @@ package amqp
 import (
 	"fmt"
 
-	"erionn-mq/internal/store"
+	"gobitmq/internal/store"
 )
 
 func (c *serverConn) handleBasicPublish(channel uint16, m BasicPublish) error {

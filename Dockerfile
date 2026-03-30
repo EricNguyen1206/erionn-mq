@@ -5,18 +5,18 @@ COPY go.mod ./
 COPY cmd/ cmd/
 COPY internal/ internal/
 
-RUN CGO_ENABLED=0 go build -o /out/erionn-mq ./cmd
+RUN CGO_ENABLED=0 go build -o /out/gobitmq ./cmd
 
 FROM gcr.io/distroless/base-debian12
 
 WORKDIR /app
-COPY --from=builder /out/erionn-mq /app/erionn-mq
+COPY --from=builder /out/gobitmq /app/gobitmq
 
-ENV ERIONN_AMQP_ADDR=":5672"
-ENV ERIONN_MGMT_ADDR=":15672"
-ENV ERIONN_DATA_DIR="/data/broker"
+ENV GOBITMQ_AMQP_ADDR=":5672"
+ENV GOBITMQ_MGMT_ADDR=":15672"
+ENV GOBITMQ_DATA_DIR="/data/broker"
 
 EXPOSE 5672 15672
 VOLUME ["/data"]
 
-ENTRYPOINT ["/app/erionn-mq"]
+ENTRYPOINT ["/app/gobitmq"]

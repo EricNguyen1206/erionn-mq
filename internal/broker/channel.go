@@ -1,6 +1,6 @@
 package broker
 
-import "erionn-mq/internal/store"
+import "gobitmq/internal/store"
 
 type Channel struct {
 	ID                    uint16

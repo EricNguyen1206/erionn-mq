@@ -3,7 +3,7 @@ package store_test
 import (
 	"testing"
 
-	"erionn-mq/internal/store"
+	"gobitmq/internal/store"
 )
 
 func newStore() *store.MemoryMessageStore {

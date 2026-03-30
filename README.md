@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="EriOnn-MQ logo" width="320" />
+  <img src="logo.png" alt="GoBitMQ logo" width="320" />
 </p>
 
 # Message Queue (MQ) project using Go
@@ -69,7 +69,7 @@ graph LR
 ## Project Structure
 
 ```text
-erionn-mq/
+gobitmq/
 ├── cmd/                # Entrypoint, initializes the system and connects components.
 ├── internal/
 │   ├── broker/         # Message broker engine (Broker, Exchange routing, Queue management, Bindings, Persistence).
