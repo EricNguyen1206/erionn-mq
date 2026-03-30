@@ -3,7 +3,7 @@ package amqp
 import (
 	"fmt"
 
-	"erionn-mq/internal/broker"
+	"gobitmq/internal/broker"
 )
 
 func (c *serverConn) handleExchDeclareRequest(channel uint16, m ExchDeclareRequest) error {

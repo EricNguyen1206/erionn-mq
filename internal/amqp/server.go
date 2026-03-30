@@ -7,9 +7,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"erionn-mq/internal/broker"
-	"erionn-mq/internal/config"
-	"erionn-mq/internal/store"
+	"gobitmq/internal/broker"
+	"gobitmq/internal/config"
+	"gobitmq/internal/store"
 )
 
 var errConnectionClosed = errors.New("amqp: connection closed")

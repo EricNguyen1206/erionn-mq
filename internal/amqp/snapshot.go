@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"erionn-mq/internal/broker"
+	"gobitmq/internal/broker"
 )
 
 type Snapshot struct {
-	GeneratedAt time.Time           `json:"generated_at"`
+	GeneratedAt time.Time             `json:"generated_at"`
 	Broker      broker.BrokerSnapshot `json:"broker"`
-	Connections []ConnectionView    `json:"connections"`
-	Channels    []ChannelView       `json:"channels"`
+	Connections []ConnectionView      `json:"connections"`
+	Channels    []ChannelView         `json:"channels"`
 }
 
 type ConnectionView struct {

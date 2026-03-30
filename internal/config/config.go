@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	envAMQPAddr        = "ERIONN_AMQP_ADDR"
-	envManagementAddr  = "ERIONN_MGMT_ADDR"
-	envDataDir         = "ERIONN_DATA_DIR"
-	envManagementUsers = "ERIONN_MGMT_USERS"
-	envManagementAllow = "ERIONN_MGMT_ALLOW_REMOTE"
+	envAMQPAddr        = "GOBITMQ_AMQP_ADDR"
+	envManagementAddr  = "GOBITMQ_MGMT_ADDR"
+	envDataDir         = "GOBITMQ_DATA_DIR"
+	envManagementUsers = "GOBITMQ_MGMT_USERS"
+	envManagementAllow = "GOBITMQ_MGMT_ALLOW_REMOTE"
 
 	DefaultAMQPAddr       = ":5672"
 	DefaultManagementAddr = ":15672"

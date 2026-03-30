@@ -5,8 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"erionn-mq/internal/broker"
-	"erionn-mq/internal/store"
+	"gobitmq/internal/broker"
+	"gobitmq/internal/store"
 )
 
 type channelState struct {

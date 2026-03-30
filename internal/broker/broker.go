@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"sync"
 
-	"erionn-mq/internal/store"
+	"gobitmq/internal/store"
 )
 
 type Broker struct {

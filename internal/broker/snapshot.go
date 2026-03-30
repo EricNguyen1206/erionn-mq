@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"erionn-mq/internal/store"
+	"gobitmq/internal/store"
 )
 
 type BrokerSnapshot struct {

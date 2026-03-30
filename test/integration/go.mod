@@ -1,4 +1,4 @@
-module erionn-mq/test/integration
+module gobitmq/test/integration
 
 go 1.25.0
 

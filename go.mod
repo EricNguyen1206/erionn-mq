@@ -1,3 +1,3 @@
-module erionn-mq
+module gobitmq
 
 go 1.25.0

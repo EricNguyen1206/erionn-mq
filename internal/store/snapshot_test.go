@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"erionn-mq/internal/store"
+	"gobitmq/internal/store"
 )
 
 func TestDurableMessageStore_PersistsReadyMessagesAcrossRestart(t *testing.T) {

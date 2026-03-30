@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '..', '..')
-const workDir = await mkdtemp(path.join(os.tmpdir(), 'erionn-mq-compat-'))
-const binary = path.join(workDir, process.platform === 'win32' ? 'erionn-mq.exe' : 'erionn-mq')
+const workDir = await mkdtemp(path.join(os.tmpdir(), 'gobitmq-compat-'))
+const binary = path.join(workDir, process.platform === 'win32' ? 'gobitmq.exe' : 'gobitmq')
 const dataDir = path.join(workDir, 'data')
 const amqpPort = await freePort()
 const managementPort = await freePort()
@@ -62,10 +62,10 @@ async function startBroker() {
     cwd: root,
     env: {
       ...process.env,
-      ERIONN_AMQP_ADDR: `127.0.0.1:${amqpPort}`,
-      ERIONN_MGMT_ADDR: `127.0.0.1:${managementPort}`,
-      ERIONN_DATA_DIR: dataDir,
-      ERIONN_MGMT_USERS: 'guest:guest:admin',
+      GOBITMQ_AMQP_ADDR: `127.0.0.1:${amqpPort}`,
+      GOBITMQ_MGMT_ADDR: `127.0.0.1:${managementPort}`,
+      GOBITMQ_DATA_DIR: dataDir,
+      GOBITMQ_MGMT_USERS: 'guest:guest:admin',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })

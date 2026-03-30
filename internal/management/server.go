@@ -9,9 +9,9 @@ import (
 	"path"
 	"strings"
 
-	"erionn-mq/internal/amqp"
-	"erionn-mq/internal/broker"
-	"erionn-mq/internal/config"
+	"gobitmq/internal/amqp"
+	"gobitmq/internal/broker"
+	"gobitmq/internal/config"
 )
 
 type Server struct {
@@ -190,9 +190,9 @@ func (s *Server) handleQueueMutations(w http.ResponseWriter, r *http.Request) {
 }
 
 type overviewResponse struct {
-	ManagementVersion string            `json:"management_version"`
-	Node              string            `json:"node"`
-	ObjectTotals      objectTotals      `json:"object_totals"`
+	ManagementVersion string              `json:"management_version"`
+	Node              string              `json:"node"`
+	ObjectTotals      objectTotals        `json:"object_totals"`
 	MessageStats      broker.MessageStats `json:"message_stats"`
 }
 
@@ -215,7 +215,7 @@ type exchangeDeclareRequest struct {
 func newOverviewResponse(snap amqp.Snapshot) overviewResponse {
 	return overviewResponse{
 		ManagementVersion: "0.1.0",
-		Node:              "erionn@localhost",
+		Node:              "gobitmq@localhost",
 		ObjectTotals: objectTotals{
 			Connections: len(snap.Connections),
 			Channels:    len(snap.Channels),

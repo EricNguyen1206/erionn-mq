@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"erionn-mq/internal/broker"
-	"erionn-mq/internal/config"
-	"erionn-mq/internal/store"
+	"gobitmq/internal/broker"
+	"gobitmq/internal/config"
+	"gobitmq/internal/store"
 )
 
 func TestServer_EndToEndPublishConsumeAck(t *testing.T) {

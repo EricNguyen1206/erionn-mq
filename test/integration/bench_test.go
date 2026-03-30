@@ -20,7 +20,7 @@ func startBrokerForBench(b *testing.B) *broker {
 	root := benchProjectRoot(b)
 	tempDir := b.TempDir()
 
-	binary := filepath.Join(tempDir, "erionn-mq")
+	binary := filepath.Join(tempDir, "gobitmq")
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
@@ -37,11 +37,11 @@ func startBrokerForBench(b *testing.B) *broker {
 	cmd := exec.Command(binary)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("ERIONN_AMQP_ADDR=127.0.0.1:%d", amqpPort),
-		fmt.Sprintf("ERIONN_MGMT_ADDR=127.0.0.1:%d", mgmtPort),
-		fmt.Sprintf("ERIONN_DATA_DIR=%s", filepath.Join(tempDir, "data")),
-		"ERIONN_MGMT_USERS=guest:guest:admin",
-		"ERIONN_MGMT_ALLOW_REMOTE=true",
+		fmt.Sprintf("GOBITMQ_AMQP_ADDR=127.0.0.1:%d", amqpPort),
+		fmt.Sprintf("GOBITMQ_MGMT_ADDR=127.0.0.1:%d", mgmtPort),
+		fmt.Sprintf("GOBITMQ_DATA_DIR=%s", filepath.Join(tempDir, "data")),
+		"GOBITMQ_MGMT_USERS=guest:guest:admin",
+		"GOBITMQ_MGMT_ALLOW_REMOTE=true",
 	)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr

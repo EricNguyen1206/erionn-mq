@@ -3,10 +3,10 @@ package main
 import (
 	"log"
 
-	"erionn-mq/internal/amqp"
-	"erionn-mq/internal/config"
-	"erionn-mq/internal/broker"
-	"erionn-mq/internal/management"
+	"gobitmq/internal/amqp"
+	"gobitmq/internal/broker"
+	"gobitmq/internal/config"
+	"gobitmq/internal/management"
 )
 
 func main() {

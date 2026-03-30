@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"erionn-mq/internal/broker"
-	"erionn-mq/internal/store"
+	"gobitmq/internal/broker"
+	"gobitmq/internal/store"
 )
 
 func TestDurableBroker_RestoresDurableTopologyAndMessages(t *testing.T) {
